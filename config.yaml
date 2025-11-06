@@ -1,46 +1,68 @@
 # ================================================
+# GENERAL SETTINGS
+# ================================================
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  # Allow health checks without authentication
+  public_routes: ["/health/readiness", "/health/liveness"]
+
+# ================================================
 # MODEL CONFIGURATION
 # ================================================
 model_list:
-  # OpenAI Models (Primary)
+  # Local Models
+  - model_name: Qwen3-0.6B
+    litellm_params:
+      model: openai/Qwen/Qwen3-0.6B  # Must match the actual model ID from SGLang
+      api_base: http://n0165:8000/v1
+      api_key: EMPTY
+      timeout: 300
+      stream_timeout: 600
+      max_retries: 2  # Retry mechanism
+    model_info:
+      id: sglang-qwen-local
+      mode: chat
+
+  # OpenAI Models (Primary) - for load balancing
   - model_name: gpt-4o
     litellm_params:
       model: openai/gpt-4o
       api_key: os.environ/OPENAI_API_KEY
       timeout: 120
       stream_timeout: 300
-      max_retries: 2
+      max_retries: 2  # Retry mechanism
+      # rpm: 3500  # Requests per minute limit
     model_info:
       id: openai-gpt4o-primary
       mode: chat
-      supports_function_calling: true
-      supports_vision: true
 
-  # OpenAI Models (Backup with different key)
+  # OpenAI Models (Backup) - for load balancing
   - model_name: gpt-4o
     litellm_params:
       model: openai/gpt-4o
       api_key: os.environ/OPENAI_API_KEY_BACKUP
       timeout: 120
+      max_retries: 2  # Retry mechanism
     model_info:
       id: openai-gpt4o-backup
 
-  # Anthropic Claude
+  # Anthropic Claude - for fallback
   - model_name: claude-3-5-sonnet
     litellm_params:
       model: anthropic/claude-3-5-sonnet-20241022
       api_key: os.environ/ANTHROPIC_API_KEY
       timeout: 120
+      max_retries: 2  # Retry mechanism
     model_info:
       id: anthropic-claude-sonnet
-      supports_function_calling: true
 
-  # Google Gemini
+  # Google Gemini - for fallback
   - model_name: gemini-2.0-flash
     litellm_params:
       model: gemini/gemini-2.0-flash-exp
       api_key: os.environ/GOOGLE_API_KEY
       timeout: 60
+      max_retries: 2  # Retry mechanism
     model_info:
       id: google-gemini-flash
 
@@ -49,138 +71,50 @@ model_list:
     litellm_params:
       model: openai/text-embedding-3-small
       api_key: os.environ/OPENAI_API_KEY
+      max_retries: 2  # Retry mechanism
     model_info:
       id: openai-embedding-small
       mode: embedding
 
 # ================================================
-# GENERAL SETTINGS
-# ================================================
-general_settings:
-  # Master key for admin operations
-  master_key: os.environ/LITELLM_MASTER_KEY
-  
-  # Database connection
-  database_url: os.environ/DATABASE_URL
-  
-  # Store models in DB (allows adding models via UI)
-  store_model_in_db: true
-  
-  # Global budget settings (optional)
-  # max_budget: 1000  # Max $1000 USD across all proxy usage
-  # budget_duration: 30d  # Reset every 30 days
-  
-  # Allow forwarding of OpenAI organization ID
-  forward_openai_org_id: true
-  
-  # Background health checks
-  background_health_checks: true
-  health_check_interval: 300  # Check every 5 minutes
-  health_check_details: true
-  
-  # Budget reset scheduler (check every 1 hour)
-  proxy_budget_rescheduler_min_time: 3600
-  proxy_budget_rescheduler_max_time: 3600
-  
-  # Admin UI settings
-  ui_access_mode: "all"  # Options: "all", "admin_only"
-  
-  # Use Redis for transaction buffering (prevents DB deadlocks)
-  use_redis_transaction_buffer: true
-  
-  # Alerting configuration
-  alerting: ["slack"]
-  alerting_threshold: 100  # Alert when 100 requests fail in a minute
-
-# ================================================
-# LITELLM SETTINGS
+# LITELLM SETTINGS - Simplified for core features
 # ================================================
 litellm_settings:
-  # Enable detailed logging
-  set_verbose: true
+  # Logging (minimal)
+  set_verbose: false
   json_logs: true
-  
-  # Retry configuration
-  num_retries: 3
-  allowed_fails: 3
-  cooldown_time: 30
   
   # Request timeout
   request_timeout: 600
   
-  # Enable response validation
-  enable_json_schema_validation: true
-  
   # Drop unsupported params for different providers
   drop_params: true
   
-  # Caching configuration
+  # CACHING CONFIGURATION
   cache: true
-  cache_params:
-    type: redis
-    supported_call_types: ["completion", "acompletion", "embedding", "aembedding"]
-    ttl: 3600  # Cache for 1 hour
-  
-  # Success callbacks for logging and monitoring
-  success_callback: ["langfuse_otel"]
-  failure_callback: ["langfuse_otel"]
-  
-  # Service callbacks
-  service_callback: ["prometheus"]
-  
-  # Callbacks for custom logging
-  callbacks: ["custom_callbacks.proxy_handler_instance"]
-  
-  # Budget management
-  # max_internal_user_budget: 100  # $100 per internal user
-  # internal_user_budget_duration: "30d"
-  
-  # max_end_user_budget: 10  # $10 per end user (customer)
-  
-  # Key generation settings
-  key_generation_settings:
-    team_key_generation:
-      allowed_team_member_roles: ["admin"]
-      required_params: ["metadata"]  # Require metadata for tracking
-    personal_key_generation:
-      allowed_user_roles: ["proxy_admin", "internal_user"]
-  
-  # Default key generation params
-  default_key_generate_params:
-    duration: "30d"  # Keys expire after 30 days by default
-    metadata:
-      environment: "production"
-  
-  # Upperbound key generation params - RATE/BUDGET LIMITS DISABLED
-  # upperbound_key_generate_params:
-  #   max_budget: 10000  # Max $10000 per key
-  #   budget_duration: "30d"
-  #   duration: "90d"  # Max 90 days key duration
-  #   max_parallel_requests: 1000
-  #   tpm_limit: 10000000
-  #   rpm_limit: 100000
+
 
 # ================================================
-# ROUTER SETTINGS (Load Balancing & Retries)
+# ROUTER SETTINGS - Load Balancing & Retry Mechanisms
 # ================================================
 router_settings:
-  # Routing strategy
+  # LOAD BALANCING: Routing strategy
   # Options: simple-shuffle, least-busy, usage-based-routing, latency-based-routing
   routing_strategy: simple-shuffle
   
-  # Retry configuration
+  # RETRY MECHANISMS: Retry configuration
   num_retries: 3
   retry_after: 5  # Wait 5 seconds before retry
   timeout: 120
   
-  # Deployment health management
+  # RETRY MECHANISMS: Deployment health management
   allowed_fails: 3
   cooldown_time: 30
   
   # Enable pre-call checks (context window, region, etc.)
   enable_pre_call_check: true
   
-  # Error-specific retry policies
+  # RETRY MECHANISMS: Error-specific retry policies
   retry_policy:
     TimeoutErrorRetries: 3
     RateLimitErrorRetries: 3
@@ -192,67 +126,38 @@ router_settings:
     ContentPolicyViolationErrorRetries: 1
     ContextWindowExceededErrorRetries: 0
   
-  # Error-specific cooldown policies
+  # RETRY MECHANISMS: Error-specific cooldown policies
   allowed_fails_policy:
     RateLimitErrorAllowedFails: 100
     TimeoutErrorAllowedFails: 50
     InternalServerErrorAllowedFails: 50
     ContentPolicyViolationErrorAllowedFails: 1000
   
-  # Fallback configuration
+  # LOAD BALANCING: Fallback configuration (fallback to different models)
   fallbacks:
     - gpt-4o:
       - claude-3-5-sonnet
     - claude-3-5-sonnet:
       - gemini-2.0-flash
   
-  # Context window fallbacks (automatic upgrade for long contexts)
+  # LOAD BALANCING: Context window fallbacks (automatic upgrade for long contexts)
   context_window_fallbacks:
     - gemini-2.0-flash: gpt-4o
     - claude-3-5-sonnet: gpt-4o
-  
-  # Redis for shared state across multiple proxy instances
-  redis_host: os.environ/REDIS_HOST
-  redis_port: os.environ/REDIS_PORT
-  redis_password: os.environ/REDIS_PASSWORD
-  
-  # Provider budget routing - DISABLED
-  # provider_budget_config:
-  #   openai:
-  #     budget_limit: 5000  # $5000/day for OpenAI
-  #     time_period: 1d
-  #   anthropic:
-  #     budget_limit: 5000  # $5000/day for Anthropic
-  #     time_period: 1d
 
 # ================================================
-# CACHE PARAMS (Redis Configuration)
+# CACHE PARAMS - Redis Configuration for Caching
 # ================================================
 cache_params:
   type: redis
   host: os.environ/REDIS_HOST
   port: os.environ/REDIS_PORT
-  password: os.environ/REDIS_PASSWORD
+  # password: os.environ/REDIS_PASSWORD  # Disabled - no password
   ssl: false
-  ttl: 3600
+  ttl: 36000  # Cache for 10 hours
   namespace: "litellm"
   supported_call_types:
     - completion
     - acompletion
     - embedding
     - aembedding
-
-# ================================================
-# ENVIRONMENT VARIABLES
-# ================================================
-environment_variables:
-  REDIS_HOST: "redis"
-  REDIS_PORT: "6379"
-  REDIS_PASSWORD: os.environ/REDIS_PASSWORD
-  OPENAI_API_KEY: os.environ/OPENAI_API_KEY
-  AZURE_API_KEY: os.environ/AZURE_API_KEY
-  AZURE_API_BASE: os.environ/AZURE_API_BASE
-  ANTHROPIC_API_KEY: os.environ/ANTHROPIC_API_KEY
-  GOOGLE_API_KEY: os.environ/GOOGLE_API_KEY
-  LANGFUSE_PUBLIC_KEY: os.environ/LANGFUSE_PUBLIC_KEY
-  LANGFUSE_SECRET_KEY: os.environ/LANGFUSE_SECRET_KEY

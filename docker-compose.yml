@@ -1,30 +1,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database for persistence
-  postgres:
-    image: postgres:16
-    container_name: litellm-postgres
-    environment:
-      POSTGRES_USER: litellm
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-litellm_secure_password}
-      POSTGRES_DB: litellm
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - litellm-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U litellm"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # Redis for caching and rate limiting
+  # Redis for caching
   redis:
     image: redis:7-alpine
     container_name: litellm-redis
@@ -42,56 +19,30 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # LiteLLM Proxy Instance 1
+  # LiteLLM Proxy Instance 1 (for load balancing)
   litellm-1:
     image: ghcr.io/berriai/litellm:main-latest
     container_name: litellm-proxy-1
     ports:
       - "4000:4000"
     environment:
-      # Database
-      - DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD:-litellm_secure_password}@postgres:5432/litellm
-      
-      # Redis
+      # Redis for caching
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_secure_password}
       
-      # Authentication
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-1234}
-      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY:-sk-salt-5678}
-      
-      # Admin UI
-      - UI_USERNAME=${UI_USERNAME:-admin}
-      - UI_PASSWORD=${UI_PASSWORD:-admin123}
-      - PROXY_BASE_URL=${PROXY_BASE_URL:-http://localhost}
-      
       # LLM Provider Keys
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AZURE_API_KEY=${AZURE_API_KEY}
-      - AZURE_API_BASE=${AZURE_API_BASE}
+      - OPENAI_API_KEY_BACKUP=${OPENAI_API_KEY_BACKUP}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       
-      # Logging
+      # Logging (minimal)
       - LITELLM_LOG=INFO
-      - SET_VERBOSE=True
-      
-      # Observability
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
-      
-      # High Availability
-      - STORE_MODEL_IN_DB=True
-      - EXPERIMENTAL_MULTI_INSTANCE_RATE_LIMITING=True
-      - LITELLM_KEY_ROTATION_ENABLED=True
-      - SEPARATE_HEALTH_APP=1
-      - SEPARATE_HEALTH_PORT=8001
+      - SET_VERBOSE=False
       
     volumes:
       - ./config.yaml:/app/config.yaml
-      - ./custom_callbacks.py:/app/custom_callbacks.py
     command:
       - "--config"
       - "/app/config.yaml"
@@ -99,55 +50,36 @@ services:
       - "4000"
       - "--num_workers"
       - "8"
-      - "--detailed_debug"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - litellm-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health/liveliness"]
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
     restart: unless-stopped
 
-  # LiteLLM Proxy Instance 2 (for high availability)
+  # LiteLLM Proxy Instance 2 (for load balancing)
   litellm-2:
     image: ghcr.io/berriai/litellm:main-latest
     container_name: litellm-proxy-2
     ports:
       - "4001:4000"
     environment:
-      - DATABASE_URL=postgresql://litellm:${POSTGRES_PASSWORD:-litellm_secure_password}@postgres:5432/litellm
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_secure_password}
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-1234}
-      - LITELLM_SALT_KEY=${LITELLM_SALT_KEY:-sk-salt-5678}
-      - UI_USERNAME=${UI_USERNAME:-admin}
-      - UI_PASSWORD=${UI_PASSWORD:-admin123}
-      - PROXY_BASE_URL=${PROXY_BASE_URL:-http://localhost}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AZURE_API_KEY=${AZURE_API_KEY}
-      - AZURE_API_BASE=${AZURE_API_BASE}
+      - OPENAI_API_KEY_BACKUP=${OPENAI_API_KEY_BACKUP}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - LITELLM_LOG=INFO
-      - SET_VERBOSE=True
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
-      - STORE_MODEL_IN_DB=True
-      - EXPERIMENTAL_MULTI_INSTANCE_RATE_LIMITING=True
-      - LITELLM_KEY_ROTATION_ENABLED=True
-      - SEPARATE_HEALTH_APP=1
-      - SEPARATE_HEALTH_PORT=8001
+      - SET_VERBOSE=False
     volumes:
       - ./config.yaml:/app/config.yaml
-      - ./custom_callbacks.py:/app/custom_callbacks.py
     command:
       - "--config"
       - "/app/config.yaml"
@@ -155,90 +87,40 @@ services:
       - "4000"
       - "--num_workers"
       - "8"
-      - "--detailed_debug"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - litellm-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health/liveliness"]
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
     restart: unless-stopped
 
-  # Nginx Load Balancer
+  # Nginx Load Balancer (for load balancing)
   nginx:
     image: nginx:alpine
     container_name: litellm-nginx
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro  # Optional: for HTTPS
     depends_on:
       - litellm-1
       - litellm-2
     networks:
       - litellm-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health/liveliness"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
     restart: unless-stopped
 
-  # Prometheus for metrics (optional)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: litellm-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
-    networks:
-      - litellm-network
-    restart: unless-stopped
-
-  # Grafana for visualization (optional)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: litellm-grafana
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
-      - GF_INSTALL_PLUGINS=redis-datasource
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
-    depends_on:
-      - prometheus
-    networks:
-      - litellm-network
-    restart: unless-stopped
-
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
     driver: local
 
 networks:

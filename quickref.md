@@ -1,8 +1,10 @@
 # LiteLLM Proxy - Quick Reference Guide
 
+Fast lookup for common commands and operations.
+
 ## 🚀 Essential Commands
 
-### Start/Stop Proxy
+### Docker Compose
 
 ```bash
 # Start all services
@@ -14,186 +16,80 @@ docker-compose down
 # View logs
 docker-compose logs -f litellm-1
 
-# Restart a service
-docker-compose restart litellm-1
+# Restart services
+docker-compose restart
 
 # Check service status
 docker-compose ps
+
+# Recreate services (after config changes)
+docker-compose up -d --force-recreate
 ```
 
-### Health Checks
+### SLURM (HPC Clusters)
 
 ```bash
-# Basic health check
-curl http://localhost/health
+# Start the proxy with Docker
+./manage_proxy.sh start
 
-# Liveness check (for Kubernetes)
-curl http://localhost/health/liveliness
+# Start without Docker (direct installation)
+./manage_proxy.sh start-direct
 
-# Readiness check
-curl http://localhost/health/readiness
+# Stop the proxy
+./manage_proxy.sh stop
 
-# Check specific service
-curl -H "Authorization: Bearer sk-1234" \
-  http://localhost/health/services?service=langfuse
+# Check status
+./manage_proxy.sh status
+
+# View logs
+./manage_proxy.sh logs
+
+# Restart
+./manage_proxy.sh restart
+```
+
+### SLURM Manual Operations
+
+```bash
+# Submit job with Docker
+sbatch start_proxy.slurm
+
+# Submit job without Docker
+sbatch start_proxy_direct.slurm
+
+# Check your jobs
+squeue -u $USER
+
+# Cancel job
+scancel <JOB_ID>
+
+# View logs
+tail -f logs/litellm-proxy_<JOB_ID>.out
+tail -f logs/litellm-proxy_<JOB_ID>.err
+```
+
+### SLURM Access & Testing
+
+```bash
+# Get node hostname
+NODE=$(squeue -j <JOB_ID> -h -o "%N")
+
+# Health check
+curl http://$NODE:4000/health
+
+# Test API
+curl -X POST "http://$NODE:4000/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hi"}]}'
+
+# Port forwarding (if node not accessible)
+ssh -L 4000:$NODE:4000 username@cluster-login
+# Then access at http://localhost:4000
 ```
 
 ---
 
-## 🔑 API Key Management
-
-### Create Keys
-
-```bash
-# Basic key
-curl -X POST 'http://localhost/key/generate' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{"models": ["gpt-4o"]}'
-
-# Key with budget and limits
-curl -X POST 'http://localhost/key/generate' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "models": ["gpt-4o", "claude-3-5-sonnet"],
-    "max_budget": 100,
-    "budget_duration": "30d",
-    "tpm_limit": 100000,
-    "rpm_limit": 1000,
-    "duration": "90d",
-    "metadata": {"team": "engineering"}
-  }'
-
-# Team-based key
-curl -X POST 'http://localhost/key/generate' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "team_id": "team-uuid-here",
-    "models": ["gpt-4o"]
-  }'
-```
-
-### Manage Keys
-
-```bash
-# Get key information
-curl -X GET 'http://localhost/key/info?key=sk-your-key' \
-  -H 'Authorization: Bearer sk-1234'
-
-# Update key
-curl -X POST 'http://localhost/key/update' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "key": "sk-your-key",
-    "max_budget": 200
-  }'
-
-# Delete key
-curl -X POST 'http://localhost/key/delete' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{"keys": ["sk-your-key"]}'
-
-# Block/Unblock key
-curl -X POST 'http://localhost/key/block' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{"key": "sk-your-key"}'
-
-curl -X POST 'http://localhost/key/unblock' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{"key": "sk-your-key"}'
-```
-
----
-
-## 👥 User Management
-
-```bash
-# Create user
-curl -X POST 'http://localhost/user/new' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "user_id": "john@company.com",
-    "user_email": "john@company.com",
-    "max_budget": 50,
-    "budget_duration": "30d",
-    "user_role": "internal_user"
-  }'
-
-# Get user info
-curl -X GET 'http://localhost/user/info?user_id=john@company.com' \
-  -H 'Authorization: Bearer sk-1234'
-
-# Update user
-curl -X POST 'http://localhost/user/update' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "user_id": "john@company.com",
-    "max_budget": 100
-  }'
-
-# Delete user
-curl -X POST 'http://localhost/user/delete' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{"user_ids": ["john@company.com"]}'
-```
-
----
-
-## 👫 Team Management
-
-```bash
-# Create team
-curl -X POST 'http://localhost/team/new' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "team_alias": "engineering",
-    "max_budget": 1000,
-    "budget_duration": "30d",
-    "tpm_limit": 1000000,
-    "rpm_limit": 10000,
-    "models": ["gpt-4o", "claude-3-5-sonnet"]
-  }'
-
-# Get team info
-curl -X GET 'http://localhost/team/info?team_id=team-uuid' \
-  -H 'Authorization: Bearer sk-1234'
-
-# Add member to team
-curl -X POST 'http://localhost/team/member_add' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "team_id": "team-uuid",
-    "member": {
-      "role": "user",
-      "user_id": "john@company.com"
-    },
-    "max_budget_in_team": 50
-  }'
-
-# Update team
-curl -X POST 'http://localhost/team/update' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "team_id": "team-uuid",
-    "max_budget": 2000
-  }'
-```
-
----
-
-## 💬 Making LLM Requests
+## 💬 Making API Requests
 
 ### Python (OpenAI SDK)
 
@@ -201,7 +97,7 @@ curl -X POST 'http://localhost/team/update' \
 import openai
 
 client = openai.OpenAI(
-    api_key="sk-your-virtual-key",
+    api_key="not-needed",
     base_url="http://localhost/v1"
 )
 
@@ -226,18 +122,6 @@ response = client.chat.completions.create(
 for chunk in response:
     if chunk.choices[0].delta.content:
         print(chunk.choices[0].delta.content, end="")
-
-# With metadata
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Hello!"}],
-    extra_body={
-        "metadata": {
-            "user_id": "user-123",
-            "session_id": "session-456"
-        }
-    }
-)
 ```
 
 ### cURL
@@ -245,36 +129,27 @@ response = client.chat.completions.create(
 ```bash
 # Basic request
 curl -X POST 'http://localhost/v1/chat/completions' \
-  -H 'Authorization: Bearer sk-your-key' \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "gpt-4o",
-    "messages": [
-      {"role": "user", "content": "Hello!"}
-    ]
+    "messages": [{"role": "user", "content": "Hello!"}]
   }'
 
-# With metadata
+# Streaming request
 curl -X POST 'http://localhost/v1/chat/completions' \
-  -H 'Authorization: Bearer sk-your-key' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "metadata": {
-      "user_id": "user-123",
-      "session_id": "session-456"
-    }
-  }'
-
-# Streaming
-curl -X POST 'http://localhost/v1/chat/completions' \
-  -H 'Authorization: Bearer sk-your-key' \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "gpt-4o",
     "messages": [{"role": "user", "content": "Tell me a story"}],
     "stream": true
+  }'
+
+# Embeddings
+curl -X POST 'http://localhost/v1/embeddings' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "text-embedding-3-small",
+    "input": "Hello world"
   }'
 ```
 
@@ -285,7 +160,7 @@ from langchain_openai import ChatOpenAI
 
 llm = ChatOpenAI(
     model="gpt-4o",
-    openai_api_key="sk-your-virtual-key",
+    openai_api_key="not-needed",
     openai_api_base="http://localhost/v1"
 )
 
@@ -295,84 +170,58 @@ print(response.content)
 
 ---
 
-## 📊 Monitoring & Analytics
+## 🎯 Testing Core Features
 
-### Check Spend
+### Test Retry Mechanism
 
 ```bash
-# Key spend
-curl -X GET 'http://localhost/key/info?key=sk-your-key' \
-  -H 'Authorization: Bearer sk-1234'
+# Check logs for retry attempts
+docker-compose logs litellm-1 | grep -i retry
 
-# User spend
-curl -X GET 'http://localhost/user/info?user_id=john@company.com' \
-  -H 'Authorization: Bearer sk-1234'
-
-# Team spend
-curl -X GET 'http://localhost/team/info?team_id=team-uuid' \
-  -H 'Authorization: Bearer sk-1234'
-
-# Global spend (last 30 days)
-curl -X GET 'http://localhost/global/spend?start_date=2024-01-01&end_date=2024-01-31' \
-  -H 'Authorization: Bearer sk-1234'
+# The proxy automatically retries on failures
 ```
 
-### View Metrics
+### Test Caching
 
 ```bash
-# Prometheus metrics
-curl http://localhost:4000/metrics
+# First request - hits the API (slower)
+time curl -X POST 'http://localhost/v1/chat/completions' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"What is 2+2?"}]}'
 
-# Access Prometheus UI
-open http://localhost:9090
-
-# Access Grafana
-open http://localhost:3000
+# Second identical request - served from cache (much faster!)
+time curl -X POST 'http://localhost/v1/chat/completions' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"What is 2+2?"}]}'
 ```
 
-### Cache Management
+### Test Load Balancing
 
 ```bash
-# Check cache health
-curl -X GET 'http://localhost/cache/ping' \
-  -H 'Authorization: Bearer sk-1234'
+# Send 100 requests
+for i in {1..100}; do
+  curl -X POST 'http://localhost/v1/chat/completions' \
+    -H 'Content-Type: application/json' \
+    -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hi '$i'"}]}' &
+done
+wait
 
-# Clear cache (if needed)
-curl -X POST 'http://localhost/cache/clear' \
-  -H 'Authorization: Bearer sk-1234'
+# Check distribution between instances
+docker-compose logs litellm-1 | grep -c "POST /v1/chat/completions"
+docker-compose logs litellm-2 | grep -c "POST /v1/chat/completions"
 ```
 
 ---
 
-## 🔧 Configuration Updates
-
-### Add Model via API
+## 🔍 Health Checks
 
 ```bash
-curl -X POST 'http://localhost/model/new' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model_name": "gpt-4-turbo",
-    "litellm_params": {
-      "model": "openai/gpt-4-turbo",
-      "api_key": "os.environ/OPENAI_API_KEY"
-    }
-  }'
-```
+# Basic health check
+curl http://localhost/health
 
-### List All Models
-
-```bash
-curl -X GET 'http://localhost/v1/models' \
-  -H 'Authorization: Bearer sk-1234'
-```
-
-### Update Router Settings
-
-```bash
-# Restart needed after config.yaml changes
-docker-compose restart litellm-1 litellm-2
+# Direct to instances
+curl http://localhost:4000/health  # litellm-1
+curl http://localhost:4001/health  # litellm-2
 ```
 
 ---
@@ -387,8 +236,8 @@ docker-compose logs
 
 # Specific service
 docker-compose logs litellm-1
-docker-compose logs postgres
 docker-compose logs redis
+docker-compose logs nginx
 
 # Follow logs
 docker-compose logs -f litellm-1
@@ -397,33 +246,63 @@ docker-compose logs -f litellm-1
 docker-compose logs --tail=100 litellm-1
 ```
 
-### Database Issues
-
-```bash
-# Connect to database
-docker-compose exec postgres psql -U litellm -d litellm
-
-# Check tables
-docker-compose exec postgres psql -U litellm -d litellm -c "\dt"
-
-# Check connections
-docker-compose exec postgres psql -U litellm -d litellm -c "SELECT * FROM pg_stat_activity;"
-```
-
 ### Redis Issues
 
 ```bash
 # Connect to Redis
-docker-compose exec redis redis-cli -a your-redis-password
+docker-compose exec redis redis-cli -a your_password
 
-# Check keys
-docker-compose exec redis redis-cli -a your-redis-password KEYS "*"
+# Check connection
+docker-compose exec redis redis-cli -a your_password PING
 
-# Check memory
-docker-compose exec redis redis-cli -a your-redis-password INFO memory
+# Check cache keys
+docker-compose exec redis redis-cli -a your_password KEYS "*"
+
+# Check memory usage
+docker-compose exec redis redis-cli -a your_password INFO memory
+
+# Check cache statistics
+docker-compose exec redis redis-cli -a your_password INFO stats
 
 # Flush cache (careful!)
-docker-compose exec redis redis-cli -a your-redis-password FLUSHALL
+docker-compose exec redis redis-cli -a your_password FLUSHALL
+```
+
+### Load Balancer Issues
+
+```bash
+# Check Nginx status
+docker-compose ps nginx
+
+# Check Nginx logs
+docker-compose logs nginx
+
+# Test direct connections
+curl http://localhost:4000/health  # litellm-1
+curl http://localhost:4001/health  # litellm-2
+
+# Test through load balancer
+curl http://localhost/health
+
+# Check upstream distribution
+docker-compose logs nginx | grep upstream
+```
+
+### Performance Issues
+
+```bash
+# Check cache hit rate
+docker-compose exec redis redis-cli -a your_password INFO stats | grep keyspace
+
+# Monitor request distribution
+docker-compose logs nginx | grep upstream
+
+# Check for failed requests
+docker-compose logs litellm-1 | grep -i error
+docker-compose logs litellm-2 | grep -i error
+
+# Check for retry attempts
+docker-compose logs litellm-1 | grep -i retry
 ```
 
 ### Restart Services
@@ -437,148 +316,146 @@ docker-compose restart
 
 # Recreate services (if config changed)
 docker-compose up -d --force-recreate
+
+# Full reset (WARNING: removes volumes and data!)
+docker-compose down -v
+docker-compose up -d
 ```
 
 ---
 
-## 📈 Budget Management
+## 🔧 Configuration Updates
 
-### Set Budgets
+### After Editing config.yaml
 
 ```bash
-# Key budget
-curl -X POST 'http://localhost/key/generate' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "models": ["gpt-4o"],
-    "max_budget": 100,
-    "budget_duration": "30d"
-  }'
+# Restart LiteLLM instances to apply changes
+docker-compose restart litellm-1 litellm-2
 
-# User budget
-curl -X POST 'http://localhost/user/new' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "user_id": "john@company.com",
-    "max_budget": 50,
-    "budget_duration": "7d"
-  }'
-
-# Team budget
-curl -X POST 'http://localhost/team/new' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "team_alias": "engineering",
-    "max_budget": 1000,
-    "budget_duration": "30d"
-  }'
+# View logs to check for errors
+docker-compose logs -f litellm-1
 ```
 
-### Reset Budgets
+### Add Model via Config
 
-Budgets auto-reset based on `budget_duration`. Manual reset:
+Edit `config.yaml`:
+
+```yaml
+model_list:
+  - model_name: new-model
+    litellm_params:
+      model: provider/model-name
+      api_key: os.environ/YOUR_API_KEY
+      timeout: 120
+      max_retries: 2
+```
+
+Then restart:
 
 ```bash
-curl -X POST 'http://localhost/user/update' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "user_id": "john@company.com",
-    "spend": 0
-  }'
+docker-compose restart litellm-1 litellm-2
 ```
 
 ---
 
-## 🎯 Rate Limiting
+## 📊 Available Models
+
+Current configuration:
+
+| Model | Provider | Type |
+|-------|----------|------|
+| `Qwen3-0.6B` | Local (SGLang) | Chat |
+| `gpt-4o` | OpenAI | Chat |
+| `claude-3-5-sonnet` | Anthropic | Chat |
+| `gemini-2.0-flash` | Google | Chat |
+| `text-embedding-3-small` | OpenAI | Embedding |
+
+List all models:
 
 ```bash
-# Set rate limits on key
-curl -X POST 'http://localhost/key/generate' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "models": ["gpt-4o"],
-    "tpm_limit": 100000,
-    "rpm_limit": 1000,
-    "max_parallel_requests": 10
-  }'
-
-# Model-specific rate limits
-curl -X POST 'http://localhost/key/generate' \
-  -H 'Authorization: Bearer sk-1234' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model_rpm_limit": {"gpt-4o": 100},
-    "model_tpm_limit": {"gpt-4o": 50000}
-  }'
+curl http://localhost/v1/models
 ```
 
 ---
 
-## 🔐 Security Best Practices
+## 🔄 Key Configuration Settings
 
-1. **Change default passwords** in `.env`:
-   ```bash
-   LITELLM_MASTER_KEY=sk-your-very-secure-key
-   UI_PASSWORD=strong-password-here
-   POSTGRES_PASSWORD=postgres-strong-password
-   REDIS_PASSWORD=redis-strong-password
-   ```
+### Retry Settings (config.yaml)
 
-2. **Use environment variables** for API keys (never hardcode)
+```yaml
+router_settings:
+  num_retries: 3
+  retry_after: 5
+  allowed_fails: 3
+  cooldown_time: 30
+  
+  retry_policy:
+    TimeoutErrorRetries: 3
+    RateLimitErrorRetries: 3
+    InternalServerErrorRetries: 2
+```
 
-3. **Enable HTTPS** in production (uncomment SSL section in nginx.conf)
+### Cache Settings (config.yaml)
 
-4. **Set up IP whitelisting** if needed
+```yaml
+litellm_settings:
+  cache: true
 
-5. **Regularly rotate** virtual keys
+cache_params:
+  type: redis
+  host: os.environ/REDIS_HOST
+  port: os.environ/REDIS_PORT
+  ttl: 36000  # 10 hours
+```
 
-6. **Monitor** failed authentication attempts
+### Load Balancing (config.yaml)
 
-7. **Use SSO** for Admin UI in production
-
-8. **Backup database** regularly:
-   ```bash
-   docker-compose exec postgres pg_dump -U litellm litellm > backup.sql
-   ```
-
----
-
-## 📝 Quick Reference: Key Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/chat/completions` | POST | Chat completions |
-| `/v1/completions` | POST | Text completions |
-| `/v1/embeddings` | POST | Generate embeddings |
-| `/v1/models` | GET | List available models |
-| `/key/generate` | POST | Create virtual key |
-| `/key/info` | GET | Get key information |
-| `/key/update` | POST | Update key |
-| `/key/delete` | POST | Delete key |
-| `/user/new` | POST | Create user |
-| `/user/info` | GET | Get user info |
-| `/team/new` | POST | Create team |
-| `/team/info` | GET | Get team info |
-| `/health` | GET | Health check |
-| `/health/liveliness` | GET | Liveness probe |
-| `/health/readiness` | GET | Readiness probe |
-| `/metrics` | GET | Prometheus metrics |
-| `/ui` | GET | Admin UI |
+```yaml
+router_settings:
+  routing_strategy: simple-shuffle
+  
+  fallbacks:
+    - gpt-4o:
+        - claude-3-5-sonnet
+    - claude-3-5-sonnet:
+        - gemini-2.0-flash
+```
 
 ---
 
-## 🆘 Support & Resources
+## 📁 Key Files
 
-- **Documentation**: https://docs.litellm.ai/
-- **GitHub**: https://github.com/BerriAI/litellm
-- **Discord**: https://discord.com/invite/wuPM9dRgDw
-- **Langfuse Docs**: https://langfuse.com/docs
+| File | Purpose |
+|------|---------|
+| `config.yaml` | Model definitions, retry policies, caching, routing |
+| `docker-compose.yml` | Docker services definition |
+| `nginx.conf` | Load balancer configuration |
+| `.env` | API keys and environment variables |
+| `manage_proxy.sh` | SLURM management script |
+| `start_proxy.slurm` | SLURM job script (with Docker) |
+| `start_proxy_direct.slurm` | SLURM job script (without Docker) |
 
 ---
 
-**Quick Tip**: Save this guide as `QUICKREF.md` in your project directory for easy access!
+## 🆘 Quick Reference: Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Services won't start | Check `.env` file exists and has correct values |
+| Redis connection failed | Verify `REDIS_PASSWORD` in `.env` matches config |
+| Cache not working | Check Redis is running: `docker-compose ps redis` |
+| Load balancer not distributing | Check both litellm instances are healthy |
+| Config changes not applied | Restart services: `docker-compose restart litellm-1 litellm-2` |
+| SLURM job not running | Check: `squeue -u $USER` and logs in `logs/` directory |
+
+---
+
+## 📚 Additional Resources
+
+- [Full Documentation](./README.md)
+- [LiteLLM Docs](https://docs.litellm.ai/)
+- [LiteLLM GitHub](https://github.com/BerriAI/litellm)
+
+---
+
+**Quick Tip**: Bookmark this page for fast reference during deployment and troubleshooting!
