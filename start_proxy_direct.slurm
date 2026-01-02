@@ -3,9 +3,9 @@
 #SBATCH --output=logs/litellm-proxy_%j.out
 #SBATCH --error=logs/litellm-proxy_%j.err
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=256G
-#SBATCH --partition=memorylong
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=128G
+#SBATCH --partition=memorylong,gpulong
 
 # ================================================
 # LiteLLM Proxy Direct Startup Script (No Docker)
@@ -97,7 +97,7 @@ fi
 echo "Starting LiteLLM proxy server..."
 echo "Config: config.yaml"
 echo "Port: 4000"
-echo "Workers: 8"
+echo "Workers: 32"
 echo ""
 
 cd $SCRIPT_DIR

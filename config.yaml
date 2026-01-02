@@ -11,16 +11,42 @@ general_settings:
 # ================================================
 model_list:
   # Local Models
-  - model_name: Qwen3-0.6B
+  - model_name: Qwen3-Next-80B-A3B-Thinking-FP8
     litellm_params:
-      model: openai/Qwen/Qwen3-0.6B  # Must match the actual model ID from SGLang
-      api_base: http://n0165:8000/v1
+      model: openai/Qwen/Qwen3-Next-80B-A3B-Thinking-FP8  # Must match the actual model ID from SGLang
+      api_base: http://n0998:30000/v1
       api_key: EMPTY
       timeout: 300
       stream_timeout: 600
       max_retries: 2  # Retry mechanism
     model_info:
-      id: sglang-qwen-local
+      id: sglang-qwen3-next-80b-a3b-thinking-fp8-local
+      mode: chat
+    
+  - model_name: Qwen3-8B
+    litellm_params:
+      model: openai/Qwen/Qwen3-8B  # Must match the actual model ID from SGLang
+      api_base: http://n0998:30000/v1
+      api_key: EMPTY
+      timeout: 300
+      stream_timeout: 600
+      max_retries: 2  # Retry mechanism
+      rpm: 1000  # Requests per minute limit
+    model_info:
+      id: sglang-qwen3-8b-n0998
+      mode: chat
+
+  - model_name: Qwen3-8B
+    litellm_params:
+      model: openai/Qwen/Qwen3-8B  # Must match the actual model ID from SGLang
+      api_base: http://localhost:30000/v1
+      api_key: EMPTY
+      timeout: 300
+      stream_timeout: 600
+      max_retries: 2  # Retry mechanism
+      rpm: 3500  # Requests per minute limit
+    model_info:
+      id: sglang-qwen3-8b-localhost
       mode: chat
 
   # OpenAI Models (Primary) - for load balancing
@@ -76,6 +102,32 @@ model_list:
       id: openai-embedding-small
       mode: embedding
 
+  - model_name: Qwen3-Embedding-4B
+    litellm_params:
+      model: openai/Qwen/Qwen3-Embedding-4B
+      api_base: http://n0164:30000/v1
+      api_key: EMPTY
+      max_retries: 2  # Retry mechanism
+      timeout: 300
+      stream_timeout: 600
+      rpm: 3500  # Requests per minute limit
+    model_info:
+      id: sglang-qwen-embedding
+      mode: embedding
+  
+  - model_name: Qwen3-Embedding-4B
+    litellm_params:
+      model: openai/Qwen/Qwen3-Embedding-4B
+      api_base: http://n0172:30000/v1
+      api_key: EMPTY
+      max_retries: 2  # Retry mechanism
+      timeout: 300
+      stream_timeout: 600
+      rpm: 1500  # Requests per minute limit
+    model_info:
+      id: sglang-qwen-embedding
+      mode: embedding
+
 # ================================================
 # LITELLM SETTINGS - Simplified for core features
 # ================================================
@@ -100,7 +152,7 @@ litellm_settings:
 router_settings:
   # LOAD BALANCING: Routing strategy
   # Options: simple-shuffle, least-busy, usage-based-routing, latency-based-routing
-  routing_strategy: simple-shuffle
+  routing_strategy: least-busy
   
   # RETRY MECHANISMS: Retry configuration
   num_retries: 3

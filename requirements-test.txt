@@ -1,0 +1,4 @@
+# Test dependencies for Redis cache tests
+pytest>=7.0.0
+redis>=4.5.0
+
